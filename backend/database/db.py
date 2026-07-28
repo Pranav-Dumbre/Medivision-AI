@@ -1,5 +1,5 @@
 """
-SQLite database for storing analysis history.
+SQLite database for storing analysis history and user data.
 """
 from __future__ import annotations
 
@@ -33,9 +33,39 @@ def initialize_db() -> None:
     """Create the database tables if they don't exist."""
     conn = _get_connection()
     cursor = conn.cursor()
+
+    # Users table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id TEXT PRIMARY KEY,
+            email TEXT UNIQUE NOT NULL,
+            full_name TEXT NOT NULL,
+            password_hash TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            is_active INTEGER DEFAULT 1,
+            profile_picture TEXT DEFAULT NULL,
+            auth_provider TEXT DEFAULT 'local'
+        )
+    """)
+
+    # Password resets table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS password_resets (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            token TEXT UNIQUE NOT NULL,
+            expires_at TEXT NOT NULL,
+            used INTEGER DEFAULT 0,
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        )
+    """)
+
+    # Analyses table (with optional user_id)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS analyses (
             id TEXT PRIMARY KEY,
+            user_id TEXT DEFAULT NULL,
             filename TEXT NOT NULL,
             timestamp TEXT NOT NULL,
             risk_level TEXT NOT NULL,
@@ -45,15 +75,24 @@ def initialize_db() -> None:
             abnormal_count INTEGER DEFAULT 0,
             analysis_mode TEXT DEFAULT 'fallback',
             result_json TEXT NOT NULL,
-            pdf_path TEXT
+            pdf_path TEXT,
+            FOREIGN KEY (user_id) REFERENCES users(id)
         )
     """)
+
+    # Migrate: add user_id column if table exists without it
+    try:
+        cursor.execute("SELECT user_id FROM analyses LIMIT 1")
+    except sqlite3.OperationalError:
+        cursor.execute("ALTER TABLE analyses ADD COLUMN user_id TEXT DEFAULT NULL")
+        logger.info("Migrated analyses table: added user_id column.")
+
     conn.commit()
     conn.close()
     logger.info(f"Database initialized at: {DB_PATH}")
 
 
-def save_analysis(result: AnalysisResult) -> str:
+def save_analysis(result: AnalysisResult, user_id: Optional[str] = None) -> str:
     """
     Save an analysis result to the database.
 
@@ -68,12 +107,13 @@ def save_analysis(result: AnalysisResult) -> str:
     cursor.execute(
         """
         INSERT OR REPLACE INTO analyses
-        (id, filename, timestamp, risk_level, summary, total_params,
+        (id, user_id, filename, timestamp, risk_level, summary, total_params,
          normal_count, abnormal_count, analysis_mode, result_json, pdf_path)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             result.id,
+            user_id,
             result.filename,
             result.timestamp,
             result.risk_level.value,
@@ -88,29 +128,45 @@ def save_analysis(result: AnalysisResult) -> str:
     )
     conn.commit()
     conn.close()
-    logger.info(f"Analysis saved: {result.id}")
+    logger.info(f"Analysis saved: {result.id} (user: {user_id})")
     return result.id
 
 
-def get_history(limit: int = 50) -> list[dict]:
+def get_history(limit: int = 50, user_id: Optional[str] = None) -> list[dict]:
     """
     Get analysis history, most recent first.
+    If user_id is provided, only return that user's analyses.
 
     Returns:
         List of dicts with id, filename, timestamp, risk_level, summary.
     """
     conn = _get_connection()
     cursor = conn.cursor()
-    cursor.execute(
-        """
-        SELECT id, filename, timestamp, risk_level, summary,
-               total_params, normal_count, abnormal_count, analysis_mode
-        FROM analyses
-        ORDER BY timestamp DESC
-        LIMIT ?
-        """,
-        (limit,),
-    )
+
+    if user_id:
+        cursor.execute(
+            """
+            SELECT id, filename, timestamp, risk_level, summary,
+                   total_params, normal_count, abnormal_count, analysis_mode
+            FROM analyses
+            WHERE user_id = ?
+            ORDER BY timestamp DESC
+            LIMIT ?
+            """,
+            (user_id, limit),
+        )
+    else:
+        cursor.execute(
+            """
+            SELECT id, filename, timestamp, risk_level, summary,
+                   total_params, normal_count, abnormal_count, analysis_mode
+            FROM analyses
+            ORDER BY timestamp DESC
+            LIMIT ?
+            """,
+            (limit,),
+        )
+
     rows = cursor.fetchall()
     conn.close()
 
