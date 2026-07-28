@@ -1,38 +1,37 @@
 """
 MediVision AI — AI-Powered Medical Report Analyzer
-Launch script: starts the Gradio application.
+Launch script: starts the Streamlit application.
 """
-import sys
 import os
-
-# Add project root to Python path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
-from backend.main import initialize_app
-from frontend.app import create_app, CUSTOM_CSS
-from frontend.theme import get_theme
+import sys
+import subprocess
 
 
 def main():
-    """Initialize backend services and launch the Gradio UI."""
     print("=" * 60)
     print("  MediVision AI — AI-Powered Medical Report Analyzer")
     print("=" * 60)
     print()
 
-    # Initialize backend (directories, DB, Ollama check)
-    initialize_app()
+    project_dir = os.path.dirname(os.path.abspath(__file__))
+    app_script = os.path.join(project_dir, "streamlit_app.py")
 
-    # Create and launch Gradio app
-    app = create_app()
-    app.launch(
-        server_name="0.0.0.0",
-        server_port=7860,
-        share=False,
-        show_error=True,
-        theme=get_theme(),
-        css=CUSTOM_CSS,
-    )
+    cmd = [
+        sys.executable,
+        "-m",
+        "streamlit",
+        "run",
+        app_script,
+        "--server.port=8501",
+        "--server.address=0.0.0.0",
+        "--browser.gatherUsageStats=false",
+    ]
+
+    print("Launching MediVision AI Streamlit app on http://localhost:8501 ...")
+    try:
+        subprocess.run(cmd, cwd=project_dir)
+    except KeyboardInterrupt:
+        print("\nShutting down MediVision AI application.")
 
 
 if __name__ == "__main__":

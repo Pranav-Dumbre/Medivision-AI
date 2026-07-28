@@ -60,6 +60,7 @@ def process_report(
     file_path: str,
     progress_callback: Optional[Callable] = None,
     force_fallback: bool = False,
+    user_id: Optional[str] = None,
 ) -> AnalysisResult:
     """
     Process a medical report end-to-end.
@@ -77,6 +78,7 @@ def process_report(
         file_path: Path to the uploaded file.
         progress_callback: Optional callback(progress_float, message_str).
         force_fallback: Force rule-based analysis even if Ollama is available.
+        user_id: Optional ID of the user uploading the report.
 
     Returns:
         AnalysisResult with all fields populated.
@@ -168,7 +170,7 @@ def process_report(
     # ── Step 6: Save to DB ──
     _update_progress(progress_callback, 0.90, "Saving analysis...")
     try:
-        analysis_id = save_analysis(result)
+        analysis_id = save_analysis(result, user_id=user_id)
         result.id = analysis_id
     except Exception as e:
         logger.warning(f"Failed to save to database: {e}")
