@@ -34,6 +34,8 @@ def initialize_app() -> None:
     # Create required directories
     dirs = [
         os.path.join(PROJECT_ROOT, "backend", "uploads"),
+        os.path.join(PROJECT_ROOT, "backend", "rag", "documents"),
+        os.path.join(PROJECT_ROOT, "backend", "rag", "vector_db"),
         os.path.join(PROJECT_ROOT, "reports"),
         os.path.join(PROJECT_ROOT, "data"),
         os.path.join(PROJECT_ROOT, "static"),
