@@ -1,6 +1,6 @@
-# 🩺 MediVision AI — AI-Powered Medical Report Analyzer
+# 🩺 MediVision AI — AI-Powered Medical Report Analyzer & RAG Chatbot
 
-**MediVision AI** is an intelligent medical report analysis tool that helps patients understand their laboratory reports in simple, non-technical language. Upload a blood test, CBC, lipid profile, or any standard lab report — and get an instant AI-powered analysis with clear explanations, risk assessment, and health recommendations.
+**MediVision AI** is an intelligent medical report analysis and retrieval system that helps patients and healthcare professionals analyze laboratory reports and query medical PDF documents using local AI models. Upload blood tests, CBC, lipid profiles, or any medical PDFs — get instant AI analysis, risk assessments, downloadable PDF reports, and an offline **RAG (Retrieval-Augmented Generation) Medical Chatbot**.
 
 ---
 
@@ -8,16 +8,17 @@
 
 | Feature | Description |
 |:--------|:------------|
+| 💬 **Medical Chatbot (RAG)** | Grounded QA on uploaded medical PDFs using FAISS & local HuggingFace embeddings (`BAAI/bge-small-en-v1.5`) |
+| 🛡️ **Zero Hallucination Guard** | Answers strictly from uploaded documents. Responds: *"I couldn't find this information in the uploaded medical documents."* if missing |
 | 📤 **Smart Upload** | Drag & drop support for PDF, JPG, JPEG, PNG files |
 | 🔍 **OCR Engine** | EasyOCR with OpenCV preprocessing for accurate text extraction |
-| 🤖 **AI Analysis** | MedGemma / BioMistral via Ollama for medical interpretation |
-| 📐 **Fallback Mode** | Rule-based analysis works without any LLM installed |
-| 📊 **Dashboard** | Color-coded stats, risk badge, and summary cards |
-| 🔬 **Detailed View** | Per-parameter explanations, causes, and health implications |
-| 💡 **Recommendations** | General health recommendations (never prescribes medicines) |
-| 📥 **PDF Reports** | Professional, branded downloadable PDF with full analysis |
+| 🤖 **Local AI Models** | BioMistral-7B / MedGemma / local HuggingFace models — 100% offline local inference |
+| 📊 **Streamlit Dashboard** | Professional healthcare dashboard in blue + teal palette with metrics, parameter filtering, and risk badges |
+| 📥 **PDF Reports** | Downloadable professional PDF reports generated via ReportLab |
 | 📚 **History** | SQLite-backed analysis history |
-| 🔒 **Privacy** | 100% local processing — no data leaves your machine |
+| 🔒 **Privacy First** | 100% local execution — no internet search or cloud API dependencies |
+
+---
 
 ## 🏥 Supported Report Types
 
@@ -29,7 +30,7 @@
 - Diabetes (HbA1c, FBS, PPBS)
 - Vitamin Reports (D, B12)
 - Electrolytes
-- Uric Acid, Iron, Ferritin, and more (50+ parameters)
+- Multi-page Medical PDF Reports
 
 ---
 
@@ -38,22 +39,15 @@
 ### Prerequisites
 
 - **Python 3.10+**
-- **Ollama** (optional, for AI analysis): [ollama.com](https://ollama.com)
 
 ### Installation
 
 ```bash
-# Clone or navigate to the project
+# Clone or navigate to project
 cd Medi-scan
 
 # Install dependencies
 pip install -r requirements.txt
-
-# (Optional) Install and pull a medical model for AI analysis
-# Install Ollama from https://ollama.com
-ollama pull medgemma
-# Or alternatively:
-ollama pull biomistral
 ```
 
 ### Launch
@@ -62,9 +56,7 @@ ollama pull biomistral
 python run.py
 ```
 
-The app will start at **http://localhost:7860**
-
-> **Note:** First launch will download EasyOCR models (~100 MB). This is a one-time setup.
+The application will start at **http://localhost:8501** in your browser.
 
 ---
 
@@ -73,54 +65,72 @@ The app will start at **http://localhost:7860**
 ```
 Medi-scan/
 ├── frontend/
-│   ├── app.py              # Gradio Blocks UI (6 tabs)
-│   └── theme.py            # Custom dark medical theme
+│   ├── app.py              # Streamlit entry interface
+│   ├── components.py       # Reusable healthcare UI components
+│   ├── style.css           # Custom medical CSS styling
+│   ├── theme.py            # Theme definitions
+│   └── pages/
+│       ├── auth.py         # Login & Authentication page
+│       ├── home.py         # Home landing page
+│       ├── upload.py       # Report upload & OCR page
+│       ├── analysis.py     # Results dashboard & PDF download
+│       └── chat.py         # RAG Medical Chatbot interface
 ├── backend/
-│   ├── main.py             # Initialization & health checks
+│   ├── main.py             # App initialization & backend setup
 │   ├── ocr/
 │   │   └── ocr_engine.py   # EasyOCR + OpenCV preprocessing
 │   ├── ai/
-│   │   ├── medical_analyzer.py   # LLM analysis via Ollama
-│   │   ├── reference_ranges.py   # 50+ lab parameter ranges
-│   │   └── fallback_analyzer.py  # Rule-based fallback
+│   │   ├── medical_analyzer.py   # LLM analysis engine
+│   │   ├── reference_ranges.py   # 50+ lab parameter reference ranges
+│   │   └── fallback_analyzer.py  # Rule-based analysis
+│   ├── rag/
+│   │   ├── document_loader.py    # Batch document loader & text cleaner
+│   │   ├── pdf_loader.py         # PDF parser (PyPDF / pdfplumber)
+│   │   ├── text_splitter.py      # Medical text chunking (RecursiveCharacterTextSplitter)
+│   │   ├── embeddings.py         # BAAI/bge-small-en-v1.5 & MiniLM embeddings
+│   │   ├── vector_store.py       # Persistent FAISS vector database
+│   │   ├── retriever.py          # Similarity search & confidence calculation
+│   │   ├── prompt.py             # Strict medical prompt templates
+│   │   ├── chat_engine.py        # Local HuggingFace LLM inference & memory
+│   │   └── rag_pipeline.py       # Complete RAG orchestrator API
 │   ├── models/
-│   │   └── schemas.py      # Pydantic data models
+│   │   └── schemas.py      # Data models & schemas
 │   ├── services/
-│   │   └── pipeline.py     # End-to-end orchestration
+│   │   └── pipeline.py     # End-to-end analyzer pipeline
 │   ├── pdf/
-│   │   └── report_generator.py   # ReportLab PDF generator
+│   │   └── report_generator.py   # PDF report generator
 │   ├── database/
-│   │   └── db.py           # SQLite persistence
-│   └── uploads/            # Uploaded files
-├── reports/                # Generated PDF reports
-├── data/                   # SQLite database
-├── static/                 # Static assets
+│   │   └── db.py           # SQLite database persistence
+│   └── uploads/            # Upload storage
+├── reports/                # PDF report output folder
+├── data/                   # SQLite database & FAISS index
+│   └── faiss_index/
+├── static/                 # Static web assets
 ├── requirements.txt
-├── run.py                  # Application launcher
+├── run.py                  # Streamlit launcher script
 └── README.md
 ```
 
 ---
 
-## 🏗️ Architecture
+## 🏗️ RAG Architecture Workflow
 
 ```
-User Upload → OCR (EasyOCR) → AI Analysis (Ollama/Fallback) → Dashboard + PDF
+User Upload PDFs → PDF Loader → Text Splitter → HuggingFace Embeddings → FAISS Vector Store → Retriever → Context + Query → Local LLM → Grounded Answer + Confidence Score + Citations
 ```
 
-1. **Upload**: Validates file type/size, copies to `uploads/`
-2. **OCR**: EasyOCR extracts text; for PDFs, PyMuPDF rasterizes pages first
-3. **Analysis**: Ollama LLM (MedGemma/BioMistral) or rule-based fallback
-4. **Display**: Gradio dashboard with stats, risk badge, detailed per-parameter cards
-5. **PDF**: ReportLab generates a professional branded report
-6. **Persist**: Results saved to SQLite for history
+1. **Document Ingestion**: Extracts raw text and page-level metadata from PDF reports.
+2. **Chunking**: Splits document text using `RecursiveCharacterTextSplitter` (800 chars, 150 overlap).
+3. **Embeddings & Vector Store**: Encodes chunks into FAISS vector database using local `BAAI/bge-small-en-v1.5` embeddings.
+4. **Retrieval & Scoring**: Retrieves top relevant chunks for user queries and computes a 0-100% confidence score.
+5. **Grounded QA**: Local HuggingFace model (`BioMistral-7B` / `MedGemma` / local pipeline) synthesizes answers strictly grounded in context, citing page numbers and document names.
 
 ---
 
 ## ⚕️ Disclaimer
 
 > This application is for **informational and educational purposes only**.
-> It is **NOT** a medical diagnosis. The AI-generated analysis should not be
+> It is **NOT** a medical diagnosis. The AI-generated analysis and chatbot responses should not be
 > used as a substitute for professional medical advice, diagnosis, or treatment.
 > Always consult a qualified healthcare provider for proper evaluation.
 
