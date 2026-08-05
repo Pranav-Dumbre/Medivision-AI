@@ -65,12 +65,15 @@ else:
         user_info = st.session_state.get("user") or {}
         user_name = user_info.get("full_name") or user_info.get("email") or "User"
         user_email = user_info.get("email") or ""
+        is_guest = user_info.get("is_guest", False)
+
+        badge_html = '<span style="background-color: #E3F2FD; color: #1565C0; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; margin-left: 8px; font-weight: 600; vertical-align: middle;">Guest Mode</span>' if is_guest else ''
 
         st.markdown(f"""
         <div class="user-profile-card">
             <div class="profile-label">Logged in as</div>
-            <div class="profile-name">👤 {user_name}</div>
-            {f'<div class="profile-email">{user_email}</div>' if user_email and user_email != user_name else ''}
+            <div class="profile-name">👤 {user_name} {badge_html}</div>
+            {f'<div class="profile-email">{user_email}</div>' if user_email and user_email != user_name and not is_guest else ''}
         </div>
         """, unsafe_allow_html=True)
         st.markdown("---")
@@ -82,20 +85,22 @@ else:
             "💬 Medical Chatbot":   "Chat",
         }
 
+        page_to_label = {v: k for k, v in nav_options.items()}
         current_page = st.session_state.get("current_page", "Home")
-        page_values = list(nav_options.values())
-        default_index = (
-            page_values.index(current_page) if current_page in page_values else 0
-        )
+        
+        # Sync widget state with current_page before rendering
+        if "nav_radio" not in st.session_state or nav_options.get(st.session_state.nav_radio) != current_page:
+            st.session_state.nav_radio = page_to_label.get(current_page, "🏠 Home")
 
-        selected_label = st.radio(
+        def _on_nav_change():
+            st.session_state.current_page = nav_options[st.session_state.nav_radio]
+
+        st.radio(
             "Navigation",
             options=list(nav_options.keys()),
-            index=default_index,
             key="nav_radio",
+            on_change=_on_nav_change,
         )
-
-        st.session_state.current_page = nav_options[selected_label]
 
         st.markdown("---")
         if st.button("🚪 Log Out", use_container_width=True, key="logout_btn"):
@@ -103,6 +108,9 @@ else:
             st.session_state.user = None
             st.session_state.current_page = "Auth"
             st.session_state.analysis_result = None
+            st.session_state.selected_report_id = None
+            if "messages" in st.session_state:
+                del st.session_state["messages"]
             st.rerun()
 
     # ── Page Router ───────────────────────────────────────────────────────

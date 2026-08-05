@@ -77,11 +77,18 @@ def _render_login_form():
             key="login_password",
         )
 
-        submitted = st.form_submit_button(
-            "🔐 Sign In",
-            use_container_width=True,
-            type="primary",
-        )
+        col1, col2 = st.columns(2)
+        with col1:
+            submitted = st.form_submit_button(
+                "🔐 Sign In",
+                use_container_width=True,
+                type="primary",
+            )
+        with col2:
+            guest_submitted = st.form_submit_button(
+                "👤 Continue as Guest",
+                use_container_width=True,
+            )
 
         if submitted:
             if not email or not password:
@@ -96,6 +103,17 @@ def _render_login_form():
                     st.rerun()
                 else:
                     st.error(message)
+        
+        if guest_submitted:
+            st.session_state.authenticated = True
+            st.session_state.user = {
+                "id": "guest_user",
+                "email": "guest@local",
+                "full_name": "Guest User",
+                "is_guest": True
+            }
+            st.session_state.current_page = "Home"
+            st.rerun()
 
     # Google Login placeholder
     st.markdown('<div class="divider-text">or continue with</div>', unsafe_allow_html=True)

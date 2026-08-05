@@ -12,7 +12,7 @@ import streamlit.components.v1 as components
 
 from backend.rag.rag_pipeline import get_rag_pipeline, RAGPipeline
 from backend.rag.prompt import NO_INFO_MESSAGE
-from frontend.components import render_header, render_footer
+from frontend.components import render_header
 from frontend.chat_export import (
     generate_chat_pdf,
     generate_chat_txt,
@@ -229,11 +229,13 @@ def render_chat_page() -> None:
 
     # ── Execute Streaming Response Generation ─────────────────────────────
     if active_prompt:
+        print("[1] User question received:", active_prompt)
         # Build history context
         history = [
             {"role": m["role"], "content": m["content"]}
             for m in st.session_state.chat_messages[:-1]
         ]
+        print("[2] History context built. Length:", len(history))
 
         # Check knowledge base indexing
         if not rag_pipeline.vector_store_manager.get_indexed_documents():
@@ -242,9 +244,12 @@ def render_chat_page() -> None:
             return
 
         # Retrieve RAG context
+        print("[3] Starting RAG Retrieval")
         retrieval = rag_pipeline.retriever.retrieve(active_prompt)
+        print("[4] RAG Retrieval Finished")
         context = retrieval.get("context_text", "")
         confidence = retrieval.get("confidence_score", 0.0)
+        print(f"[5] Retrieved Context Length: {len(context)}, Confidence: {confidence}")
 
         if not context or confidence < 15.0:
             st.session_state.chat_messages.append({"role": "assistant", "content": NO_INFO_MESSAGE})
@@ -252,6 +257,7 @@ def render_chat_page() -> None:
             return
 
         # Prepare assistant streaming UI
+        print("[6] Preparing UI for streaming")
         with st.chat_message("assistant", avatar="🧑‍⚕️"):
             message_placeholder = st.empty()
 
@@ -264,6 +270,7 @@ def render_chat_page() -> None:
             st.session_state.is_generating = True
 
             # Stream tokens using official Hugging Face TextIteratorStreamer
+            print("[7] Calling stream_generate")
             try:
                 for token in rag_pipeline.chat_engine.stream_generate(
                     question=active_prompt, context=context, chat_history=history, timeout=40.0
@@ -279,8 +286,10 @@ def render_chat_page() -> None:
 
             except Exception as ge:
                 logger.error(f"Error during streaming: {ge}")
+                print(f"[8-ERROR] Streaming Error: {ge}")
                 accumulated_tokens.append(" [An error occurred during generation.]")
 
+            print("[8] Streaming Finished. Returning response.")
             st.session_state.is_generating = False
             final_response = "".join(accumulated_tokens).strip()
 
@@ -288,7 +297,9 @@ def render_chat_page() -> None:
                 final_response = NO_INFO_MESSAGE
 
             message_placeholder.markdown(final_response)
+            print("[9] Streamlit rendering response complete")
 
         # Persist assistant message and rerun
         st.session_state.chat_messages.append({"role": "assistant", "content": final_response})
+        print("[10] Persisting and Rerunning")
         st.rerun()

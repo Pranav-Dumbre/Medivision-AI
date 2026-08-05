@@ -20,6 +20,7 @@ try:
         StoppingCriteria,
         StoppingCriteriaList,
     )
+    import queue
 except ImportError:
     AutoModelForCausalLM = None
     AutoTokenizer = None
@@ -180,6 +181,36 @@ class LocalMedicalLLMEngine:
             return
 
         if not self._is_loaded:
+            import psutil
+            import torch
+            
+            # Determine required memory based on model size
+            required_gb = 0.0
+            if "7b" in self.model_name.lower():
+                required_gb = 14.0 if not torch.cuda.is_available() else 8.0
+            elif "2b" in self.model_name.lower():
+                required_gb = 5.0 if not torch.cuda.is_available() else 3.0
+            elif "1.1b" in self.model_name.lower():
+                required_gb = 2.5 if not torch.cuda.is_available() else 1.5
+
+            if torch.cuda.is_available():
+                # Check VRAM
+                available_vram_gb = torch.cuda.get_device_properties(0).total_memory / (1024**3)
+                if required_gb > 0 and available_vram_gb < required_gb:
+                    error_msg = f" [Error: Insufficient VRAM. '{self.model_name}' requires at least {required_gb:.1f}GB of VRAM, but only {available_vram_gb:.1f}GB is available. The chatbot cannot start.]"
+                    logger.error(error_msg)
+                    yield error_msg
+                    return
+            else:
+                # Check System RAM
+                ram_info = psutil.virtual_memory()
+                available_ram_gb = ram_info.available / (1024 ** 3)
+                if required_gb > 0 and available_ram_gb < required_gb:
+                    error_msg = f" [Error: Insufficient System RAM. '{self.model_name}' requires at least {required_gb:.1f}GB of available RAM, but only {available_ram_gb:.1f}GB is available. This prevents severe system freezing.]"
+                    logger.error(error_msg)
+                    yield error_msg
+                    return
+            
             self.load_model()
 
         if self.model is None or self.tokenizer is None or TextIteratorStreamer is None:
@@ -216,7 +247,7 @@ class LocalMedicalLLMEngine:
 
             # Official TextIteratorStreamer setup
             streamer = TextIteratorStreamer(
-                self.tokenizer, skip_prompt=True, skip_special_tokens=True
+                self.tokenizer, skip_prompt=True, skip_special_tokens=True, timeout=timeout
             )
             stopping_criteria = CancellableStoppingCriteria()
             self._active_stopping_criteria = stopping_criteria
@@ -242,26 +273,24 @@ class LocalMedicalLLMEngine:
             thread.daemon = True
             thread.start()
 
-            start_time = time.time()
             full_accumulated = []
 
-            for token_text in streamer:
-                # Check for timeout protection
-                if time.time() - start_time > timeout:
-                    logger.warning(f"Generation timeout of {timeout}s reached. Terminating stream.")
-                    stopping_criteria.stop()
-                    yield " [The response took too long to generate.]"
-                    break
+            try:
+                for token_text in streamer:
+                    if stopping_criteria.stopped:
+                        logger.info("Streamer loop interrupted by user stop request.")
+                        break
 
-                if stopping_criteria.stopped:
-                    logger.info("Streamer loop interrupted by user stop request.")
-                    break
-
-                if token_text:
-                    full_accumulated.append(token_text)
-                    yield token_text
+                    if token_text:
+                        full_accumulated.append(token_text)
+                        yield token_text
+            except queue.Empty:
+                logger.warning(f"Generation timeout of {timeout}s reached. Terminating stream.")
+                stopping_criteria.stop()
+                yield " [Response generation timed out. Please try again.]"
 
             self._active_stopping_criteria = None
+
 
         except Exception as e:
             logger.error(f"Error during streaming generation: {e}")

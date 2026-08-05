@@ -50,37 +50,7 @@ def render_home_page():
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # ─── Supported Reports ───
-    st.markdown("""
-    <div style="text-align:center; margin:1.5rem 0 1rem;">
-        <h3 style="color:#1565C0; font-weight:700;">🏥 Supported Report Types</h3>
-    </div>
-    """, unsafe_allow_html=True)
 
-    report_cols = st.columns(4)
-    reports = [
-        ("🩸", "Complete Blood Count", "CBC"),
-        ("🫀", "Lipid Profile", "Cholesterol"),
-        ("🫘", "Kidney Function", "KFT/RFT"),
-        ("🫁", "Liver Function", "LFT"),
-        ("🦋", "Thyroid Panel", "TSH, T3, T4"),
-        ("🍬", "Diabetes", "HbA1c, FBS"),
-        ("💊", "Vitamin Reports", "D, B12"),
-        ("⚡", "Electrolytes", "Na, K, Ca"),
-    ]
-
-    for i, (icon, name, detail) in enumerate(reports):
-        with report_cols[i % 4]:
-            st.markdown(f"""
-            <div style="padding:1rem; border-radius:12px; background:#F5F9FF;
-                        border:1px solid #E3F2FD; margin-bottom:0.75rem; text-align:center;">
-                <div style="font-size:1.5rem;">{icon}</div>
-                <div style="font-weight:600; color:#1565C0; font-size:0.9rem;">{name}</div>
-                <div style="color:#90A4AE; font-size:0.8rem;">{detail}</div>
-            </div>
-            """, unsafe_allow_html=True)
-
-    st.markdown("<br>", unsafe_allow_html=True)
 
     # ─── Call to Action ───
     col1, col2, col3 = st.columns([1, 2, 1])
