@@ -169,11 +169,7 @@ def _header_footer(canvas, doc):
     canvas.rect(0, 0, A4[0], 30, fill=True, stroke=False)
     canvas.setFillColor(colors.HexColor("#64748B"))
     canvas.setFont("Helvetica", 7)
-    canvas.drawCentredString(
-        A4[0] / 2, 12,
-        "This report is for informational purposes only. Not a medical diagnosis. "
-        "Consult a healthcare professional.",
-    )
+
     canvas.drawRightString(A4[0] - 20, 12, f"Page {doc.page}")
 
     canvas.restoreState()
@@ -462,12 +458,6 @@ def generate_pdf(analysis: AnalysisResult, output_path: str) -> str:
         )
     story.append(Spacer(1, 16))
 
-    # ─── Disclaimer ───
-    story.append(HRFlowable(
-        width="100%", thickness=1, color=COLOR_HIGH,
-        spaceBefore=8, spaceAfter=4,
-    ))
-    story.append(Paragraph(analysis.disclaimer, styles["DisclaimerText"]))
 
     # ─── Analysis Metadata ───
     story.append(Spacer(1, 12))

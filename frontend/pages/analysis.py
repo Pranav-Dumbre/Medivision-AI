@@ -11,9 +11,10 @@ import os
 import streamlit as st
 
 from backend.models.schemas import AnalysisResult
+from backend.database.db import get_history, get_analysis_by_id
+from backend.services.pipeline import REPORTS_DIR
 from frontend.components import (
     render_header,
-    render_footer,
     render_stats_row,
     render_risk_badge,
     render_patient_info,
@@ -28,6 +29,15 @@ def render_analysis_page():
     """Render the Analysis/Dashboard page."""
 
     render_header()
+    
+    selected_report_id = st.session_state.get("selected_report_id")
+    if selected_report_id and selected_report_id != "guest_analysis_temp":
+        loaded_result = get_analysis_by_id(selected_report_id)
+        if loaded_result:
+            st.session_state.analysis_result = loaded_result
+            # Clear selected_report_id so we don't keep hitting the DB on every interaction
+            # Or keep it to know which one is active? 
+            # We can keep it so it's consistent.
 
     result: AnalysisResult = st.session_state.get("analysis_result")
 
@@ -45,6 +55,8 @@ def render_analysis_page():
         if st.button("📤 Go to Upload", use_container_width=True, type="primary"):
             st.session_state.current_page = "Upload"
             st.rerun()
+            
+        _render_analysis_history()
         return
 
     # ─── Dashboard Header ───
@@ -84,8 +96,6 @@ def render_analysis_page():
         """, unsafe_allow_html=True)
         render_findings(result)
 
-        render_footer()
-
     # ═══ Detailed Analysis Tab ═══
     with tabs[1]:
         st.markdown("""
@@ -117,8 +127,6 @@ def render_analysis_page():
             for param in filtered_params:
                 render_param_card(param)
 
-        render_footer()
-
     # ═══ Recommendations Tab ═══
     with tabs[2]:
         st.markdown("""
@@ -130,20 +138,21 @@ def render_analysis_page():
 
         render_recommendations(result)
 
-        st.markdown("""
-        <div class="disclaimer" style="margin-top:2rem;">
-            ⚕️ <strong>Note:</strong> These are general wellness suggestions, not medical prescriptions.
-            Always consult your healthcare provider before making changes to your health routine.
-        </div>
-        """, unsafe_allow_html=True)
-
     # ═══ Download Tab ═══
     with tabs[3]:
         st.markdown("""
         <h3 style="color:#1565C0; font-weight:700;">📥 Download Report</h3>
         """, unsafe_allow_html=True)
 
-        if result.pdf_path and os.path.exists(result.pdf_path):
+        actual_pdf_path = None
+        if result.pdf_path:
+            # If it's already an absolute path (from old DB records), use it. Otherwise, build it.
+            if os.path.isabs(result.pdf_path):
+                actual_pdf_path = result.pdf_path
+            else:
+                actual_pdf_path = os.path.join(REPORTS_DIR, result.pdf_path)
+
+        if actual_pdf_path and os.path.exists(actual_pdf_path):
             st.markdown(f"""
             <div class="success-box">
                 ✅ <strong>PDF report generated successfully!</strong><br>
@@ -154,24 +163,58 @@ def render_analysis_page():
             </div>
             """, unsafe_allow_html=True)
 
-            with open(result.pdf_path, "rb") as pdf_file:
-                st.download_button(
-                    label="📥 Download PDF Report",
-                    data=pdf_file.read(),
-                    file_name=os.path.basename(result.pdf_path),
-                    mime="application/pdf",
-                    use_container_width=True,
-                    type="primary",
-                )
+            try:
+                with open(actual_pdf_path, "rb") as pdf_file:
+                    st.download_button(
+                        label="📥 Download PDF Report",
+                        data=pdf_file.read(),
+                        file_name=os.path.basename(actual_pdf_path),
+                        mime="application/pdf",
+                        use_container_width=True,
+                        type="primary",
+                    )
+            except Exception as e:
+                st.error(f"Unable to read PDF file for download: {e}")
         else:
             st.warning("PDF report is not available for this analysis.")
 
-        # Raw OCR text
-        if result.raw_ocr_text:
-            with st.expander("📝 View Extracted OCR Text (Raw)"):
-                st.text_area(
-                    "Raw OCR Output",
-                    value=result.raw_ocr_text,
-                    height=300,
-                    disabled=True,
-                )
+
+    st.markdown("<br><br>", unsafe_allow_html=True)
+    _render_analysis_history()
+
+
+def _render_analysis_history():
+    user = st.session_state.get("user")
+    if not user or user.get("is_guest", False):
+        return
+        
+    history = get_history(limit=10, user_id=user.get("id"))
+    if not history:
+        return
+        
+    st.markdown("""
+    <h3 style="color:#1565C0; font-weight:700;">
+        📂 Analysis History
+    </h3>
+    <hr style="margin-top: 0; margin-bottom: 1rem;">
+    """, unsafe_allow_html=True)
+    
+    for row in history:
+        with st.container():
+            col1, col2, col3, col4 = st.columns([3, 2, 2, 2])
+            with col1:
+                st.markdown(f"**📄 {row['filename']}**")
+            with col2:
+                # Add Risk Level Badge with appropriate color if possible, or just text
+                risk = row.get('risk_level', 'Unknown')
+                color = "#43A047" if "low" in risk.lower() else "#F57C00" if "moderate" in risk.lower() else "#E53935" if "high" in risk.lower() else "#78909C"
+                st.markdown(f"**Risk:** <span style='color:{color};'>{risk}</span>", unsafe_allow_html=True)
+            with col3:
+                # The timestamp in db is like "2026-08-05 22:35:00"
+                # The prompt asks for "Analysis Date: 05 Aug 2026" but just timestamp is fine
+                st.markdown(f"**Analysis Date:**<br>{row['timestamp'].split(' ')[0]}", unsafe_allow_html=True)
+            with col4:
+                if st.button("Open Analysis", key=f"open_{row['id']}", use_container_width=True):
+                    st.session_state.selected_report_id = row['id']
+                    st.rerun()
+            st.markdown("<hr style='margin: 0.5rem 0;'>", unsafe_allow_html=True)

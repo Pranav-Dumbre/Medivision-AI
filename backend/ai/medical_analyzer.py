@@ -35,21 +35,12 @@ SYSTEM_PROMPT = """You are a medical laboratory report analyzer. Your task is to
 
 IMPORTANT RULES:
 1. You are NOT providing a medical diagnosis. You are explaining lab values in simple language.
-2. Always include that this is for informational purposes only.
 3. Never prescribe medications.
 4. Only provide general health recommendations.
 
 Analyze the following medical report text and return a JSON object with EXACTLY this structure:
 
 {
-  "patient_info": {
-    "name": "patient name or Not Available",
-    "age": "age or Not Available",
-    "gender": "gender or Not Available",
-    "report_date": "date or Not Available",
-    "lab_name": "laboratory name or Not Available",
-    "ref_number": "reference number or Not Available"
-  },
   "parameters": [
     {
       "test_name": "Name of the test",

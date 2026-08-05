@@ -12,6 +12,7 @@ import logging
 import streamlit as st
 
 from backend.services.pipeline import process_report
+from backend.database.db import get_history
 from frontend.components import render_header
 
 logger = logging.getLogger(__name__)
@@ -99,6 +100,40 @@ def render_upload_page():
             • PDF reports with embedded text work best
         </div>
         """, unsafe_allow_html=True)
+        
+    st.markdown("<br>", unsafe_allow_html=True)
+    _render_upload_history()
+
+
+def _render_upload_history():
+    user = st.session_state.get("user")
+    if not user or user.get("is_guest", False):
+        return
+        
+    history = get_history(limit=10, user_id=user.get("id"))
+    if not history:
+        return
+        
+    st.markdown("""
+    <h3 style="color:#1565C0; font-weight:700; margin-top: 2rem;">
+        📂 Uploaded Report History
+    </h3>
+    <hr style="margin-top: 0; margin-bottom: 1rem;">
+    """, unsafe_allow_html=True)
+    
+    for row in history:
+        with st.container():
+            col1, col2, col3 = st.columns([3, 2, 2])
+            with col1:
+                st.markdown(f"**📄 {row['filename']}**")
+            with col2:
+                st.markdown(f"🕒 {row['timestamp']}")
+            with col3:
+                if st.button("Go To Analysis", key=f"go_{row['id']}", use_container_width=True):
+                    st.session_state.selected_report_id = row['id']
+                    st.session_state.current_page = "Analysis"
+                    st.rerun()
+            st.markdown("<hr style='margin: 0.5rem 0;'>", unsafe_allow_html=True)
 
 
 def _run_analysis(uploaded_file):
@@ -132,6 +167,7 @@ def _run_analysis(uploaded_file):
 
         # Store result in session and navigate
         st.session_state.analysis_result = result
+        st.session_state.selected_report_id = result.id
         progress_bar.progress(1.0, text="Analysis complete! ✅")
 
         status_placeholder.markdown("""

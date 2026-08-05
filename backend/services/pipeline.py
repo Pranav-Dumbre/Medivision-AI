@@ -153,6 +153,10 @@ def process_report(
     result.filename = filename
     result.raw_ocr_text = ocr_text
 
+    # Extract Patient Info via structured regex (prevents LLM hallucination)
+    from backend.ocr.patient_parser import parse_patient_info
+    result.patient_info = parse_patient_info(ocr_text)
+
     # ── Step 5: Generate PDF ──
     _update_progress(progress_callback, 0.80, "Generating PDF report...")
     timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -161,7 +165,7 @@ def process_report(
 
     try:
         generate_pdf(result, pdf_path)
-        result.pdf_path = pdf_path
+        result.pdf_path = pdf_filename
         logger.info(f"PDF generated: {pdf_path}")
     except Exception as e:
         logger.error(f"PDF generation failed: {e}")
@@ -170,8 +174,11 @@ def process_report(
     # ── Step 6: Save to DB ──
     _update_progress(progress_callback, 0.90, "Saving analysis...")
     try:
-        analysis_id = save_analysis(result, user_id=user_id)
-        result.id = analysis_id
+        if user_id != "guest_user":
+            analysis_id = save_analysis(result, user_id=user_id)
+            result.id = analysis_id
+        else:
+            result.id = "guest_analysis_temp"
     except Exception as e:
         logger.warning(f"Failed to save to database: {e}")
 
